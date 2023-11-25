@@ -17,18 +17,15 @@ public class ConvertUtil {
      * @return Buffer 流
      */
     public static Future<Buffer> getImageFromBase64(String obj) {
-        Future<Buffer> result = Future.future();
         if (obj == null) {
-            result.fail(new ReplyException(ReplyFailure.RECIPIENT_FAILURE, 500, "图片读取失败"));
-            return result;
+            return Future.failedFuture(new ReplyException(ReplyFailure.RECIPIENT_FAILURE, 500, "图片读取失败"));
         }
 
         Base64.Decoder decoder = Base64.getDecoder();
         byte[] bs;
         bs = decoder.decode(obj);
         Buffer buffer = Buffer.buffer(bs);
-        result.complete(buffer);
-        return result;
+        return Future.succeededFuture(buffer);
     }
 
     private static final String svgTemplate =

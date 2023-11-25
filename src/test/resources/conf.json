@@ -4,8 +4,14 @@
     "test.host": "127.0.0.1",
     "index.url" : "https://gushi.ci/",
     "redis": {
-        "host": "127.0.0.1",
-        "port": 6379,
-        "select": 0
+        "endpoint": "redis://localhost:6379",
+        "role ": "MASTER",
+        "maxWaitingHandlers": 2048,
+        "netClientOptions": {
+            "TcpKeepAlive": true,
+            "TcpNoDelay": true
+        }
     }
 }
+
+

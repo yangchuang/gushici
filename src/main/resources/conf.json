@@ -1,7 +1,7 @@
 {
     "http.port" : 8080,
-    "api.url" : "https://localhost:8080/",
-    "index.url" : "https://localhost:8080/",
+    "api.url" : "https://skytool.cn/shici",
+    "index.url" : "https://skytool.cn/",
     "redis": {
         "host": "127.0.0.1",
         "port": 6379,

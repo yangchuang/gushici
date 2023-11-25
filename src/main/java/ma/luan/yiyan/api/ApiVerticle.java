@@ -2,6 +2,7 @@ package ma.luan.yiyan.api;
 
 import io.vertx.core.AbstractVerticle;
 import io.vertx.core.Future;
+import io.vertx.core.Promise;
 import io.vertx.core.eventbus.ReplyException;
 import io.vertx.core.eventbus.ReplyFailure;
 import io.vertx.core.http.HttpServerRequest;
@@ -11,19 +12,18 @@ import io.vertx.core.json.JsonObject;
 import io.vertx.ext.web.Router;
 import io.vertx.ext.web.RoutingContext;
 import io.vertx.ext.web.handler.BodyHandler;
+import lombok.extern.slf4j.Slf4j;
 import ma.luan.yiyan.constants.Key;
 import ma.luan.yiyan.util.ConvertUtil;
 import ma.luan.yiyan.util.JsonCollector;
-import org.apache.logging.log4j.LogManager;
-import org.apache.logging.log4j.Logger;
 
 import java.util.Arrays;
 
+@Slf4j
 public class ApiVerticle extends AbstractVerticle {
-    private Logger log = LogManager.getLogger(this.getClass());
 
     @Override
-    public void start(Future<Void> startFuture) {
+    public void start(Promise<Void> startFuture) {
         Router router = Router.router(vertx);
         router.route().handler(BodyHandler.create());
         router.get("/*").handler(this::log); // 全局日志处理，会执行 next() 到下一个
@@ -55,7 +55,7 @@ public class ApiVerticle extends AbstractVerticle {
         result.put("welcome", "欢迎使用古诗词·一言");
         result.put("api-document", "下面为本API可用的所有类型，使用时，在链接最后面加上 .svg / .txt / .json / .png 可以获得不同格式的输出");
         result.put("help", "具体安装方法请访问项目首页 " + config().getString("index.url", "http://localhost/"));
-        vertx.eventBus().<JsonArray>send(Key.GET_HELP_FROM_REDIS, null, res -> {
+        vertx.eventBus().<JsonArray>request(Key.GET_HELP_FROM_REDIS, "get_help_doc", res -> {
             if (res.succeeded()) {
                 result.put("list", res.result().body());
                 returnJsonWithCache(routingContext, result);
@@ -68,9 +68,11 @@ public class ApiVerticle extends AbstractVerticle {
     private void handleGushici(RoutingContext routingContext) {
         // 这里有两层回调，因为第二层回调需要用到第一层回调的数据。
         parseURI(routingContext) // 获取到 URI 上面的参数
-            .setHandler(params -> {
+            .onComplete(params -> {
+                log.info("=========");
+                log.info(params.result().toString());
                 if (params.succeeded()) {
-                    vertx.eventBus().<String>send(Key.GET_GUSHICI_FROM_REDIS, params.result(), res -> { // 从 Redis 拿数据
+                    vertx.eventBus().<String>request(Key.GET_GUSHICI_FROM_REDIS, params.result(), res -> { // 从 Redis 拿数据
                         if (res.succeeded()) {
                             returnGushici(routingContext, res.result().body(), params.result());
                         } else {
@@ -84,7 +86,7 @@ public class ApiVerticle extends AbstractVerticle {
     }
 
     private void showLog(RoutingContext routingContext) {
-        vertx.eventBus().<JsonObject>send(Key.GET_HISTORY_FROM_REDIS, null, res -> {
+        vertx.eventBus().<JsonObject>request(Key.GET_HISTORY_FROM_REDIS, new JsonObject(), res -> {
             if (res.succeeded()) {
                 returnJson(routingContext, res.result().body());
             } else {
@@ -147,12 +149,12 @@ public class ApiVerticle extends AbstractVerticle {
                 break;
             }
             case "png": {
-                ConvertUtil.getImageFromBase64(obj).setHandler(res -> {
+                ConvertUtil.getImageFromBase64(obj).onComplete(res -> {
                     if (res.succeeded()) {
                         setCommonHeader(routingContext.response()
                             .putHeader("Content-Type", "image/png"))
                             .putHeader("Content-Length", res.result().length() + "")
-                            .write(res.result()).end();
+                            .write(res.result());
                     } else {
                         routingContext.fail(res.cause());
                     }
@@ -185,8 +187,6 @@ public class ApiVerticle extends AbstractVerticle {
      * @return {format: "png", categories: [shenghuo, buyi]}, {format:"json", categories:[""]}
      */
     private Future<JsonObject> parseURI(RoutingContext routingContext) {
-        Future<JsonObject> result = Future.future();
-
         String rawCategory = routingContext.request().getParam("param0");
         String rawFormat = routingContext.request().getParam("param1");
         // 如果是 "all" 则当没有分类处理
@@ -210,8 +210,7 @@ public class ApiVerticle extends AbstractVerticle {
 
         pathParams.put("categories", categories);
         pathParams.put("format", format);
-        result.complete(pathParams);
-        return result;
+        return Future.succeededFuture(pathParams);
     }
 
     private void parseAndSet(JsonObject jsonObject, String paramName,
